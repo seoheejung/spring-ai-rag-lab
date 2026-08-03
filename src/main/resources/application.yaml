@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: spring-ai-rag-lab
+  main:
+    web-application-type: none
+
+rag:
+  document:
+    enabled: false # 문서 처리 CLI 실행 여부
+    source-pdf: documents/source/graph-engineering-v2026.08.02.pdf
