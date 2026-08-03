@@ -15,13 +15,15 @@ spring:
 
   ai:
     model:
-      chat: none # Chat Model 자동 구성 제외
+      chat: ollama # Ollama Chat Model 사용
       embedding: ollama # Ollama 임베딩 모델 사용
 
     ollama:
       base-url: http://localhost:11434
       init:
         pull-model-strategy: never # 애플리케이션 시작 시 모델 다운로드 제외
+      chat:
+        model: ${OLLAMA_CHAT_MODEL} # 환경 변수 기반 Chat Model 지정
       embedding:
         model: qwen3-embedding:0.6b # 임베딩 모델 고정
 
@@ -41,3 +43,9 @@ rag:
     question: ""
     top-k: 5
     similarity-threshold: 0.0
+
+  generation:
+    enabled: false # RAG 답변 생성 CLI 실행 여부
+    question: "" # 수동 RAG·Advisor 공통 질문
+    top-k: 5 # 공통 검색 결과 수
+    similarity-threshold: 0.7 # 공통 유사도 임계값

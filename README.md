@@ -54,7 +54,7 @@ flowchart TD
 | ------- | ------------ | ---------------------------------- |
 | Phase 1 | [문서 읽기와 청킹](docs/phase1-document-chunking.md) | PDF 읽기, `Document` 확인, 청킹 설정 비교 |
 | Phase 2 | [임베딩과 벡터 검색](docs/phase2-vector-search.md) | 임베딩 생성, pgvector 저장, 유사도 검색 |
-| Phase 3 | RAG 답변 생성    | 수동 RAG와 `QuestionAnswerAdvisor` 비교 |
+| Phase 3 | [수동 RAG와 QuestionAnswerAdvisor](docs/phase3-rag.md) | 검색 문맥 구성, `ChatClient` 답변 생성, 수동 방식과 Advisor 방식 비교 |
 | Phase 4 | 검색·생성 품질 평가  | 검색 지표와 답변 근거성 평가                   |
 | Phase 5 | 검색 방식 개선     | 키워드·벡터·하이브리드 검색과 리랭킹               |
 | Phase 6 | Graph 기반 RAG | GraphDB 관계 탐색과 원문 청크 연결            |
@@ -64,18 +64,19 @@ flowchart TD
 
 ## 기술 스택
 
-| 구분            | 기술                                 |
-| ------------- | ---------------------------------- |
-| 언어            | Java 21                            |
-| 애플리케이션        | Spring Boot                        |
-| AI 프레임워크      | Spring AI                          |
-| Vector Store  | PostgreSQL, pgvector               |
-| GraphDB       | Neo4j                              |
-| 문서 형식         | Markdown, Text, PDF                |
-| Azure 모델      | Azure OpenAI                       |
-| Azure 검색      | Azure AI Search                    |
+| 구분 | 기술 |
+| --- | --- |
+| 언어 | Java 21 |
+| 애플리케이션 | Spring Boot |
+| AI 프레임워크 | Spring AI |
+| 로컬 AI 실행 환경 | Ollama |
+| Vector Store | PostgreSQL, pgvector |
+| GraphDB | Neo4j |
+| 문서 형식 | Markdown, Text, PDF |
+| Azure 모델 | Azure OpenAI |
+| Azure 검색 | Azure AI Search |
 | Azure GraphDB | Azure Cosmos DB for Apache Gremlin |
-| 빌드 도구         | Gradle                             |
+| 빌드 도구 | Gradle |
 
 ---
 
@@ -230,6 +231,136 @@ Remove-Item Env:SPRING_APPLICATION_JSON
 | 답변 생성               | 미포함                            |
 
 > 구현 구조, 검색 결과와 Top-K·Similarity Threshold 비교 내용은 `docs/phase2-vector-search.md`에 기록
+
+## Phase 3 실행
+
+### Ollama Chat Model 준비
+
+```powershell
+ollama pull qwen2.5-coder:7b
+ollama list
+ollama show qwen2.5-coder:7b
+```
+
+#### 확인한 Chat Model capability
+
+```text
+completion
+tools
+insert
+```
+
+### 환경 변수 설정
+
+`.env`에 Chat Model을 지정한다.
+
+```dotenv
+OLLAMA_CHAT_MODEL=qwen2.5-coder:7b
+```
+
+### 한글 출력 설정
+
+```powershell
+chcp 65001 > $null
+
+[Console]::InputEncoding =
+    [System.Text.UTF8Encoding]::new()
+
+[Console]::OutputEncoding =
+    [System.Text.UTF8Encoding]::new()
+
+$OutputEncoding =
+    [Console]::OutputEncoding
+
+$env:JAVA_TOOL_OPTIONS =
+    "-Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8"
+```
+
+### 수동 RAG와 QuestionAnswerAdvisor 실행
+
+수동 RAG와 Advisor 방식은 같은 질문, Top-K, Similarity Threshold를 사용한다.
+
+```powershell
+$env:SPRING_APPLICATION_JSON = @'
+{
+  "rag": {
+    "generation": {
+      "enabled": true,
+      "question": "그래프 신경망에서 이웃 정보를 집계할 때 어떤 함수를 사용해야 하는가?",
+      "top-k": 5,
+      "similarity-threshold": 0.7
+    }
+  }
+}
+'@
+
+.\gradlew.bat bootRun --console=plain |
+  Tee-Object -FilePath .\build\phase3-rag-output.txt
+
+Remove-Item Env:SPRING_APPLICATION_JSON
+Remove-Item Env:JAVA_TOOL_OPTIONS
+```
+
+### 고정 검색 조건
+
+```text
+Top-K: 5
+Similarity Threshold: 0.7
+Vector Store: PgVectorStore
+EmbeddingModel: OllamaEmbeddingModel
+Chat Model: qwen2.5-coder:7b
+저장 청크: 633개
+```
+
+검색 결과가 없더라도 Top-K나 Similarity Threshold를 변경하지 않는다.
+
+### 주요 출력
+
+* 공통 질문과 검색 조건
+* 검색 결과 수와 순위
+* 청크 번호와 유사도
+* 검색된 청크 본문
+* 수동 RAG Context
+* 수동 RAG 답변
+* `QuestionAnswerAdvisor` 답변
+* Retrieval 실패와 Generation 실패 판정 근거
+
+### 검증 결과
+
+| 항목                   | 결과                            |
+| -------------------- | ----------------------------- |
+| Chat Model 구현체       | `OllamaChatModel`             |
+| Chat Model           | `qwen2.5-coder:7b`            |
+| Vector Store         | `PgVectorStore`               |
+| 재사용 청크               | 633개                          |
+| Top-K                | 5                             |
+| Similarity Threshold | 0.7                           |
+| 관련 질문 검색 결과          | 0개                            |
+| 수동 RAG               | 검색 결과가 없을 때 답변 거부             |
+| Advisor              | 검색 문서에서 근거를 확인할 수 없는 답변 생성    |
+| Retrieval 실패         | 확인                            |
+| Generation 실패        | 확인하지 못함                       |
+| 정상 답변 거부             | 확인                            |
+| 사전 학습 지식 사용 가능성      | 확인                            |
+| Grounding 실패         | 확인                            |
+| 전체 테스트               | 9개 성공                         |
+| 실패 테스트               | 0개                            |
+| 실행 결과                | `BUILD SUCCESSFUL`            |
+| 실행 로그                | `build/phase3-rag-output.txt` |
+
+### 방식별 결과
+
+| 항목         | 수동 RAG               | QuestionAnswerAdvisor         |
+| ---------- | -------------------- | ----------------------------- |
+| 검색 호출      | 직접 호출                | Advisor 내부 처리                 |
+| Context 구성 | 직접 생성                | 자동 결합                         |
+| 검색 결과 확인   | 직접 가능                | 직접 반환되지 않음                    |
+| 생성 답변      | `알 수 없다.`            | 일반 지식 형태 답변                   |
+| 답변 거부      | 성공                   | 실패                            |
+| 문서 근거      | 관련 문서 없음 상태와 일치      | 수동 검색 결과에서 확인 불가              |
+| 실패 유형      | Retrieval 실패 후 정상 거부 | 사전 학습 지식 사용 가능성, Grounding 실패 |
+
+> 구현 구조, 수동 RAG와 Advisor 비교, 실패 원인과 실행 결과는 `docs/phase3-rag.md`에 기록
 
 ---
 
