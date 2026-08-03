@@ -42,6 +42,20 @@ public class DocumentChunkingService {
         );
     }
 
+    public List<Document> createChunks(
+            ChunkingScenario scenario
+    ) {
+        // 전체 페이지 통합 Document 생성
+        List<Document> sourceDocuments =
+                pdfDocumentLoader.loadAllPages();
+
+        // 지정 조건 기반 문서 청킹
+        return tokenDocumentSplitter.split(
+                sourceDocuments,
+                scenario
+        );
+    }
+
     private ChunkingResult createResult(
             List<Document> sourceDocuments,
             ChunkingScenario scenario

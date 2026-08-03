@@ -1,10 +1,43 @@
 spring:
+  config:
+    import: "optional:file:./.env[.properties]" # 프로젝트 루트 환경 변수 파일 로드
+
   application:
     name: spring-ai-rag-lab
+
   main:
-    web-application-type: none
+    web-application-type: none # Non-Web CLI 실행 구성
+
+  datasource:
+    url: jdbc:postgresql://localhost:${POSTGRES_PORT:5432}/${POSTGRES_DB}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+
+  ai:
+    model:
+      chat: none # Chat Model 자동 구성 제외
+      embedding: ollama # Ollama 임베딩 모델 사용
+
+    ollama:
+      base-url: http://localhost:11434
+      init:
+        pull-model-strategy: never # 애플리케이션 시작 시 모델 다운로드 제외
+      embedding:
+        model: qwen3-embedding:0.6b # 임베딩 모델 고정
+
+    vectorstore:
+      pgvector:
+        initialize-schema: true # pgvector 스키마 자동 초기화
 
 rag:
   document:
     enabled: false # 문서 처리 CLI 실행 여부
     source-pdf: documents/source/graph-engineering-v2026.08.02.pdf
+
+  retrieval:
+    enabled: false # 벡터 검색 CLI 실행 여부
+    store: false # 문서 청크 저장 여부
+    search: false # 유사도 검색 여부
+    question: ""
+    top-k: 5
+    similarity-threshold: 0.0
