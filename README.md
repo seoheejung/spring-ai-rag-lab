@@ -56,7 +56,7 @@ flowchart TD
 | Phase 2 | [임베딩과 벡터 검색](docs/phase2-vector-search.md) | 임베딩 생성, pgvector 저장, 유사도 검색 |
 | Phase 3 | [수동 RAG와 QuestionAnswerAdvisor](docs/phase3-rag.md) | 검색 문맥 구성, `ChatClient` 답변 생성, 수동 방식과 Advisor 방식 비교 |
 | Phase 4 | [검색·생성 품질 평가](docs/phase4-evaluation.md) | 평가 질문 구성, 검색 지표 계산, 생성 답변 근거성 평가 |
-| Phase 5 | 검색 방식 개선     | 키워드·벡터·하이브리드 검색과 리랭킹               |
+| Phase 5 | [검색 방식 개선](docs/phase5-search-improvement.md) | 키워드·벡터 검색 비교, RRF 기반 하이브리드 검색, 리랭킹 전후 평가 |
 | Phase 6 | Graph 기반 RAG | GraphDB 관계 탐색과 원문 청크 연결            |
 | Phase 7 | Azure AI 적용  | Azure OpenAI와 Azure AI Search 적용   |
 
@@ -73,6 +73,8 @@ flowchart TD
 | 임베딩 모델        | `qwen3-embedding:0.6b`             |
 | Chat Model    | `qwen2.5-coder:7b`                 |
 | Vector Store  | PostgreSQL 17, pgvector            |
+| 키워드 검색        | PostgreSQL Full-text Search        |
+| 검색 결과 결합      | 애플리케이션 RRF 순위 병합                 |
 | 평가 데이터        | JSON                               |
 | 검색 품질 평가      | Hit@K, Recall@K, Precision@K, MRR  |
 | 생성 품질 평가      | 검색 청크와 생성 답변 수동 대조                 |
@@ -510,6 +512,121 @@ Remove-Item Env:SPRING_APPLICATION_JSON
 | `build/phase4-evaluation-output.txt` | 평가 실행 로그 |
 
 > 구현 구조, 검색 지표 계산, 수동 판정 기준, 실패 유형과 상세 실행 결과는 `docs/phase4-evaluation.md`에 기록
+
+## Phase 5 실행
+
+> Phase 4 Retrieval 실패 질문을 대상으로 키워드 검색, 벡터 검색, RRF 하이브리드 검색의 품질과 검색 시간 비교
+
+### 고정 조건
+
+| 항목                   | 값                                   |
+| -------------------- | ----------------------------------- |
+| 원본 문서                | `graph-engineering-v2026.08.02.pdf` |
+| 저장 청크                | 633개                                |
+| 평가 질문                | `evaluation/questions.json`         |
+| 임베딩 모델               | `qwen3-embedding:0.6b`              |
+| 임베딩 차원               | 1,024                               |
+| 벡터 검색 Top-K          | 5                                   |
+| 키워드 검색 Top-K         | 5                                   |
+| Similarity Threshold | 0.7                                 |
+| RRF 기준값              | 60                                  |
+| 리랭킹 후보 제한            | 20                                  |
+| 최종 결과 수              | 5                                   |
+
+#### 제외 범위
+
+* 문서 재처리
+* 저장 청크 변경
+* 청킹 변경
+* 임베딩 모델 변경
+* 프롬프트 변경
+* Chat Model 변경
+* 생성 답변 평가
+* GraphDB
+* Azure AI
+
+### 검색 방식
+
+| 실험 | 검색 방식                       | 실행 결과         |
+| -- | --------------------------- | ------------- |
+| A  | PostgreSQL Full-text Search | 질문 3개 모두 0건   |
+| B  | pgvector 벡터 검색              | 질문 3개 모두 0건   |
+| C  | 키워드 검색 + 벡터 검색 + RRF        | 질문 3개 모두 0건   |
+| D  | 하이브리드 검색 + 리랭킹              | 입력 후보가 없어 미수행 |
+
+### 검색 개선 실행
+
+RRF 기준값 설정:
+
+```powershell
+$env:RAG_IMPROVEMENT_RRF_K = "60"
+```
+
+Phase 5 실행:
+
+```powershell
+.\gradlew.bat bootRun `
+  --args="--rag.improvement.enabled=true" `
+  --console=plain
+```
+
+전체 테스트:
+
+```powershell
+.\gradlew.bat clean test --console=plain
+```
+
+실행 결과:
+
+```text
+평가 질문 수: 3
+키워드 검색 결과: 모두 0건
+벡터 검색 결과: 모두 0건
+하이브리드 검색 결과: 모두 0건
+리랭킹 후보 수: 모두 0건
+전체 테스트: 12개
+실패 테스트: 0개
+BUILD SUCCESSFUL
+```
+
+### 검색 지표 비교
+
+검색 품질 지표는 답변 가능한 `q-001`, `q-002`를 대상으로 계산했다.
+
+| 지표          | Phase 4 벡터 검색 | Phase 5 벡터 검색 |      하이브리드 검색 | 하이브리드 + 리랭킹 |
+| ----------- | ------------: | ------------: | ------------: | ----------- |
+| Hit@5       |      `0.0000` |      `0.0000` |      `0.0000` | 미수행         |
+| Recall@5    |      `0.0000` |      `0.0000` |      `0.0000` | 미수행         |
+| Precision@5 |      `0.0000` |      `0.0000` |      `0.0000` | 미수행         |
+| MRR         |      `0.0000` |      `0.0000` |      `0.0000` | 미수행         |
+| 평균 검색 시간    |       측정하지 않음 |  `90.1305 ms` | `190.3373 ms` | 측정 불가       |
+
+검색 시간은 `q-001`, `q-002`, `q-003`의 실제 검색 호출 시간을 포함해 계산했다.
+
+하이브리드 검색은 벡터 검색보다 평균 `100.2068 ms` 길게 측정됐으며, 검색 품질 지표의 변화는 없었다.
+
+### 확인 결과
+
+* 기대 청크 `graph-engineering-v2026.08.02.pdf#461`의 Vector Store 저장 확인
+* 기대 청크 본문과 메타데이터 정상 확인
+* 키워드 검색과 벡터 검색의 후보 생성 결과 0건
+* RRF 병합 대상과 리랭킹 입력 후보 없음
+* RRF `k=60`, `k=20` 비교 결과 순위 변화 없음
+* Phase 4 Retrieval 실패 `q-001`, `q-002` 개선 없음
+* 리랭킹 상태 `NOT_EXECUTED` 저장
+* 기존 테스트 12개 성공
+* Phase 5 실행 및 결과 저장 성공
+
+근본 검색 실패 원인은 현재 실행 결과만으로 확정하지 않았다.
+
+### 결과 파일
+
+| 파일                                              | 역할                                                   |
+| ----------------------------------------------- | ---------------------------------------------------- |
+| `evaluation/results/phase5-search-results.json` | Phase 4 기준값, Phase 5 실행 설정, 검색 지표, 질문별 검색 시간, 리랭킹 상태 |
+| `docs/phase5-search-improvement.md`             | 키워드 검색, RRF 하이브리드 검색, 실패 확인, 실행 결과 상세 기록             |
+
+> 키워드 검색 구현, RRF 순위 결합, 리랭킹 미수행 사유와 상세 측정 결과는 `docs/phase5-search-improvement.md`에 기록
 
 ---
 

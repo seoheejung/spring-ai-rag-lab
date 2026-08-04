@@ -56,3 +56,16 @@ rag:
     results-path: evaluation/results/phase4-results.json # 자동 평가 결과 파일 경로
     top-k: 5 # 평가 검색 결과 수
     similarity-threshold: 0.7 # 평가 유사도 임계값
+
+  improvement:
+    enabled: false # 검색 방식 개선 CLI 실행 여부
+    questions-path: evaluation/questions.json # Phase 4 평가 질문 경로
+    baseline-results-path: evaluation/results/phase4-results-reviewed.json # Phase 4 기준 결과
+    results-path: evaluation/results/phase5-search-results.json # Phase 5 검색 결과
+    keyword-top-k: 5 # 키워드 검색 결과 수
+    vector-top-k: 5 # 벡터 검색 결과 수
+    similarity-threshold: 0.7 # 벡터 검색 유사도 임계값
+    rrf-k: ${RAG_IMPROVEMENT_RRF_K} # RRF 실험 기준값
+    candidate-count: 20 # 리랭킹 입력 후보 수
+    final-top-k: 5 # 최종 검색 결과 수
+    reranking-enabled: false # 리랭킹 적용 여부
