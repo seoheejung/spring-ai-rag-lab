@@ -55,7 +55,7 @@ flowchart TD
 | Phase 1 | [문서 읽기와 청킹](docs/phase1-document-chunking.md) | PDF 읽기, `Document` 확인, 청킹 설정 비교 |
 | Phase 2 | [임베딩과 벡터 검색](docs/phase2-vector-search.md) | 임베딩 생성, pgvector 저장, 유사도 검색 |
 | Phase 3 | [수동 RAG와 QuestionAnswerAdvisor](docs/phase3-rag.md) | 검색 문맥 구성, `ChatClient` 답변 생성, 수동 방식과 Advisor 방식 비교 |
-| Phase 4 | 검색·생성 품질 평가  | 검색 지표와 답변 근거성 평가                   |
+| Phase 4 | [검색·생성 품질 평가](docs/phase4-evaluation.md) | 평가 질문 구성, 검색 지표 계산, 생성 답변 근거성 평가 |
 | Phase 5 | 검색 방식 개선     | 키워드·벡터·하이브리드 검색과 리랭킹               |
 | Phase 6 | Graph 기반 RAG | GraphDB 관계 탐색과 원문 청크 연결            |
 | Phase 7 | Azure AI 적용  | Azure OpenAI와 Azure AI Search 적용   |
@@ -64,19 +64,24 @@ flowchart TD
 
 ## 기술 스택
 
-| 구분 | 기술 |
-| --- | --- |
-| 언어 | Java 21 |
-| 애플리케이션 | Spring Boot |
-| AI 프레임워크 | Spring AI |
-| 로컬 AI 실행 환경 | Ollama |
-| Vector Store | PostgreSQL, pgvector |
-| GraphDB | Neo4j |
-| 문서 형식 | Markdown, Text, PDF |
-| Azure 모델 | Azure OpenAI |
-| Azure 검색 | Azure AI Search |
+| 구분            | 기술                                 |
+| ------------- | ---------------------------------- |
+| 언어            | Java 21                            |
+| 애플리케이션        | Spring Boot 4.1.0                  |
+| AI 프레임워크      | Spring AI 2.0.0                    |
+| 로컬 AI 실행 환경   | Ollama                             |
+| 임베딩 모델        | `qwen3-embedding:0.6b`             |
+| Chat Model    | `qwen2.5-coder:7b`                 |
+| Vector Store  | PostgreSQL 17, pgvector            |
+| 평가 데이터        | JSON                               |
+| 검색 품질 평가      | Hit@K, Recall@K, Precision@K, MRR  |
+| 생성 품질 평가      | 검색 청크와 생성 답변 수동 대조                 |
+| GraphDB       | Neo4j                              |
+| 문서 형식         | Markdown, Text, PDF                |
+| Azure 모델      | Azure OpenAI                       |
+| Azure 검색      | Azure AI Search                    |
 | Azure GraphDB | Azure Cosmos DB for Apache Gremlin |
-| 빌드 도구 | Gradle |
+| 빌드 도구         | Gradle                             |
 
 ---
 
@@ -105,20 +110,35 @@ spring-ai-rag-lab/
 │   └── phase7-azure-rag.md
 └── src/
     ├── main/
+    │   ├── java/
+    │   │   └── com/example/rag/
+    │   │       ├── document/
+    │   │       ├── retrieval/
+    │   │       ├── generation/
+    │   │       └── evaluation/
+    │   └── resources/
     └── test/
+        └── java/
+            └── com/example/rag/
+                ├── document/
+                ├── retrieval/
+                ├── generation/
+                └── evaluation/
 ```
 
-| 경로                          | 역할                  |
-| --------------------------- | ------------------- |
-| `documents/source`          | 원본 문서               |
-| `documents/normalized`      | 정규화된 문서             |
-| `evaluation/questions.json` | 평가 질문과 기대 결과        |
-| `evaluation/results`        | 검색·답변 평가 결과         |
-| `docs/phase*.md`            | Phase별 구현·실행·검증 기록  |
-| `src/main`                  | 애플리케이션 코드와 설정       |
-| `src/test`                  | 자동 검증 코드            |
 
-> Java 패키지의 기능과 구성요소 책임 기준 구성
+| 경로                          | 역할                         |
+| --------------------------- | -------------------------- |
+| `documents/source`          | 원본 문서                      |
+| `documents/normalized`      | 정규화된 문서                    |
+| `evaluation/questions.json` | 평가 질문, 질문 유형, 기대 문서, 기대 청크 |
+| `evaluation/results`        | 검색 결과, 생성 답변, 수동 평가 결과     |
+| `docs/phase*.md`            | Phase별 구현·실행·검증 기록         |
+| `src/main/java`             | 애플리케이션 코드                  |
+| `src/main/resources`        | 애플리케이션 설정                  |
+| `src/test/java`             | 자동 검증 코드                   |
+
+> Java 패키지는 Phase 번호가 아닌 기능과 구성요소의 책임을 기준으로 구성
 
 ---
 
@@ -252,7 +272,7 @@ insert
 
 ### 환경 변수 설정
 
-`.env`에 Chat Model을 지정한다.
+#### `.env`에 Chat Model 지정
 
 ```dotenv
 OLLAMA_CHAT_MODEL=qwen2.5-coder:7b
@@ -278,7 +298,7 @@ $env:JAVA_TOOL_OPTIONS =
 
 ### 수동 RAG와 QuestionAnswerAdvisor 실행
 
-수동 RAG와 Advisor 방식은 같은 질문, Top-K, Similarity Threshold를 사용한다.
+수동 RAG와 Advisor 방식은 같은 질문, Top-K, Similarity Threshold 사용
 
 ```powershell
 $env:SPRING_APPLICATION_JSON = @'
@@ -312,7 +332,7 @@ Chat Model: qwen2.5-coder:7b
 저장 청크: 633개
 ```
 
-검색 결과가 없더라도 Top-K나 Similarity Threshold를 변경하지 않는다.
+> 검색 결과가 없더라도 Top-K나 Similarity Threshold를 변경하지 않는다.
 
 ### 주요 출력
 
@@ -361,6 +381,135 @@ Chat Model: qwen2.5-coder:7b
 | 실패 유형      | Retrieval 실패 후 정상 거부 | 사전 학습 지식 사용 가능성, Grounding 실패 |
 
 > 구현 구조, 수동 RAG와 Advisor 비교, 실패 원인과 실행 결과는 `docs/phase3-rag.md`에 기록
+
+## Phase 4 실행
+
+> Phase 3 고정 조건 기반 검색·생성 품질 평가 및 Phase 5 비교 기준값 확보
+
+### 고정 조건
+
+| 항목 | 값 |
+| --- | --- |
+| 원본 문서 | `graph-engineering-v2026.08.02.pdf` |
+| 저장 청크 | 633개 |
+| Vector Store | `PgVectorStore` |
+| 임베딩 모델 | `qwen3-embedding:0.6b` |
+| Chat Model | `qwen2.5-coder:7b` |
+| 생성 방식 | 수동 RAG |
+| Top-K | 5 |
+| Similarity Threshold | 0.7 |
+
+#### 제외 범위
+
+* 문서 재처리
+* 청킹 변경
+* 모델 변경
+* 검색 조건 변경
+* 검색 방식 개선
+
+### 평가 데이터
+
+```text
+evaluation/questions.json
+```
+
+| 질문 ID | 유형 | 답변 가능 여부 | 기대 청크 |
+| --- | --- | --- | --- |
+| `q-001` | `exact-term` | 가능 | `graph-engineering-v2026.08.02.pdf#461` |
+| `q-002` | `semantic-paraphrase` | 가능 | `graph-engineering-v2026.08.02.pdf#461` |
+| `q-003` | `unanswerable` | 불가능 | 없음 |
+
+- 기대 문서·청크 사전 지정
+- 답이 없는 질문의 기대 문서·청크 빈 배열 유지
+- 검색 실행 후 평가 데이터 변경 금지
+
+### 평가 실행
+
+```
+$env:SPRING_APPLICATION_JSON = @'
+{
+  "rag": {
+    "document": {
+      "enabled": false
+    },
+    "retrieval": {
+      "enabled": false
+    },
+    "generation": {
+      "enabled": false
+    },
+    "evaluation": {
+      "enabled": true,
+      "questions-path": "evaluation/questions.json",
+      "results-path": "evaluation/results/phase4-results.json",
+      "top-k": 5,
+      "similarity-threshold": 0.7
+    }
+  }
+}
+'@
+
+.\gradlew.bat bootRun --console=plain |
+  Tee-Object -FilePath .\build\phase4-evaluation-output.txt
+
+Remove-Item Env:SPRING_APPLICATION_JSON
+```
+
+### 검색 평가 결과
+
+| 지표 | 결과 |
+| --- | --- |
+| Hit@5 | `0.0000` |
+| Recall@5 | `0.0000` |
+| Precision@5 | `0.0000` |
+| MRR | `0.0000` |
+
+- `q-001`, `q-002`: 기대 청크 미검색
+- `q-003`: 검색 지표 계산 제외
+- 검색 결과: 세 질문 모두 빈 배열
+
+### 생성 평가 결과
+
+| 항목 | 결과 |
+| --- | --- |
+| Retrieval 실패 | `q-001`, `q-002` |
+| Generation 실패 | 없음 |
+| 정상 거부 | `q-003` |
+| 거부 실패 | 없음 |
+| Groundedness 실패 | 0건 |
+| Unsupported Claim | 0건 |
+
+| 질문 ID | 실패 유형 |
+| --- | --- |
+| `q-001` | `RETRIEVAL_FAILURE` |
+| `q-002` | `RETRIEVAL_FAILURE` |
+| `q-003` | `NORMAL_REFUSAL` |
+
+### 테스트 결과
+
+```
+.\gradlew.bat clean test --console=plain
+```
+
+| 항목 | 결과 |
+| --- | --- |
+| 전체 테스트 | 12개 |
+| 성공 | 12개 |
+| 실패 | 0개 |
+| 건너뜀 | 0개 |
+| 테스트 실행 시간 | 25.541초 |
+| Gradle 전체 실행 시간 | 35초 |
+| 실행 결과 | `BUILD SUCCESSFUL` |
+
+### 결과 파일
+
+| 파일 | 역할 |
+| --- | --- |
+| `evaluation/results/phase4-results.json` | 자동 평가 원본 |
+| `evaluation/results/phase4-results-reviewed.json` | 생성 품질 수동 판정 결과 |
+| `build/phase4-evaluation-output.txt` | 평가 실행 로그 |
+
+> 구현 구조, 검색 지표 계산, 수동 판정 기준, 실패 유형과 상세 실행 결과는 `docs/phase4-evaluation.md`에 기록
 
 ---
 

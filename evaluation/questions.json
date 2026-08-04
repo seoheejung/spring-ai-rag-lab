@@ -1,0 +1,34 @@
+[
+  {
+    "id": "q-001",
+    "question": "지식과 실행을 한 그래프에 합친다는 것은 무엇인가?",
+    "type": "exact-term",
+    "expectedDocumentIds": [
+      "graph-engineering-v2026.08.02.pdf"
+    ],
+    "expectedChunkIds": [
+      "graph-engineering-v2026.08.02.pdf#461"
+    ],
+    "answerable": true
+  },
+  {
+    "id": "q-002",
+    "question": "에이전트 실행이 어떤 사실을 읽었는지 추적하려면 그래프를 어떻게 구성해야 하는가?",
+    "type": "semantic-paraphrase",
+    "expectedDocumentIds": [
+      "graph-engineering-v2026.08.02.pdf"
+    ],
+    "expectedChunkIds": [
+      "graph-engineering-v2026.08.02.pdf#461"
+    ],
+    "answerable": true
+  },
+  {
+    "id": "q-003",
+    "question": "Spring AI가 제공하는 양자 암호화 알고리즘은 무엇인가?",
+    "type": "unanswerable",
+    "expectedDocumentIds": [],
+    "expectedChunkIds": [],
+    "answerable": false
+  }
+]

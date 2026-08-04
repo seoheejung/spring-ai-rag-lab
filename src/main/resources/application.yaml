@@ -49,3 +49,10 @@ rag:
     question: "" # 수동 RAG·Advisor 공통 질문
     top-k: 5 # 공통 검색 결과 수
     similarity-threshold: 0.7 # 공통 유사도 임계값
+
+  evaluation:
+    enabled: false # 검색·생성 품질 평가 CLI 실행 여부
+    questions-path: evaluation/questions.json # 평가 질문 파일 경로
+    results-path: evaluation/results/phase4-results.json # 자동 평가 결과 파일 경로
+    top-k: 5 # 평가 검색 결과 수
+    similarity-threshold: 0.7 # 평가 유사도 임계값
