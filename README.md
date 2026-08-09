@@ -50,15 +50,15 @@ flowchart TD
 
 ## 진행 단계
 
-| Phase   | 주제           | 주요 범위                              |
-| ------- | ------------ | ---------------------------------- |
-| Phase 1 | [문서 읽기와 청킹](docs/phase1-document-chunking.md) | PDF 읽기, `Document` 확인, 청킹 설정 비교 |
-| Phase 2 | [임베딩과 벡터 검색](docs/phase2-vector-search.md) | 임베딩 생성, pgvector 저장, 유사도 검색 |
-| Phase 3 | [수동 RAG와 QuestionAnswerAdvisor](docs/phase3-rag.md) | 검색 문맥 구성, `ChatClient` 답변 생성, 수동 방식과 Advisor 방식 비교 |
-| Phase 4 | [검색·생성 품질 평가](docs/phase4-evaluation.md) | 평가 질문 구성, 검색 지표 계산, 생성 답변 근거성 평가 |
-| Phase 5 | [검색 방식 개선](docs/phase5-search-improvement.md) | 키워드·벡터 검색 비교, RRF 기반 하이브리드 검색, 리랭킹 전후 평가 |
-| Phase 6 | Graph 기반 RAG | GraphDB 관계 탐색과 원문 청크 연결            |
-| Phase 7 | Azure AI 적용  | Azure OpenAI와 Azure AI Search 적용   |
+| Phase   | 주제                                                         | 주요 범위                              |
+| ------- |-------------------------------| ------------------ |
+| Phase 1 | [문서 읽기와 청킹](docs/phase1-document-chunking.md)     | PDF 읽기, `Document` 확인, 청킹 설정 비교 |
+| Phase 2 | [임베딩과 벡터 검색](docs/phase2-vector-search.md)        | 임베딩 생성, pgvector 저장, 유사도 검색 |
+| Phase 3 | [수동 RAG와 QuestionAnswerAdvisor](docs/phase3-rag.md)        | 검색 문맥 구성, `ChatClient` 답변 생성, 수동 방식과 Advisor 방식 비교 |
+| Phase 4 | [검색·생성 품질 평가](docs/phase4-evaluation.md)        | 평가 질문 구성, 검색 지표 계산, 생성 답변 근거성 평가 |
+| Phase 5 | [검색 방식 개선](docs/phase5-search-improvement.md)        | 키워드·벡터 검색 비교, RRF 기반 하이브리드 검색, 리랭킹 전후 평가 |
+| Phase 6 | [GraphDB와 Graph 기반 RAG](docs/phase6-graph-rag.md) | Neo4j 관계 탐색, 관련 문서 ID 조회, Vector Store 원문 연결, 일반 RAG 비교 |
+| Phase 7 | Azure AI 적용                                                | Azure OpenAI와 Azure AI Search 적용   |
 
 ---
 
@@ -117,6 +117,7 @@ spring-ai-rag-lab/
     │   │       ├── document/
     │   │       ├── retrieval/
     │   │       ├── generation/
+    │   │       ├── graph/
     │   │       └── evaluation/
     │   └── resources/
     └── test/
@@ -125,6 +126,7 @@ spring-ai-rag-lab/
                 ├── document/
                 ├── retrieval/
                 ├── generation/
+                ├── graph/
                 └── evaluation/
 ```
 
@@ -627,6 +629,235 @@ BUILD SUCCESSFUL
 | `docs/phase5-search-improvement.md`             | 키워드 검색, RRF 하이브리드 검색, 실패 확인, 실행 결과 상세 기록             |
 
 > 키워드 검색 구현, RRF 순위 결합, 리랭킹 미수행 사유와 상세 측정 결과는 `docs/phase5-search-improvement.md`에 기록
+
+## Phase 6 실행
+
+> Phase 4 관계 질문을 대상으로 Neo4j 관계 탐색으로 관련 문서 ID를 조회하고, 기존 Vector Store 원문 검색과 연결해 일반 RAG와 Graph 기반 RAG 결과 비교
+
+### 고정 조건
+
+| 항목 | 값 |
+| --- | --- |
+| 원본 문서 | `graph-engineering-v2026.08.02.pdf` |
+| 저장 청크 | 633개 |
+| 평가 질문 | `evaluation/questions.json` |
+| Graph 질문 | `evaluation/graph-questions.json` |
+| Vector Store | `PgVectorStore` |
+| 임베딩 모델 | `qwen3-embedding:0.6b` |
+| 임베딩 차원 | 1,024 |
+| Chat Model | `qwen2.5-coder:7b` |
+| 생성 방식 | 기존 수동 RAG |
+| Top-K | 5 |
+| Similarity Threshold | 0.7 |
+| GraphDB | Neo4j `2026.06.0` |
+
+#### 제외 범위
+
+* 원본 문서와 저장 청크 변경
+* 청킹 설정 변경
+* 임베딩 모델 변경
+* Chat Model 변경
+* System Prompt 변경
+* Phase 5 키워드·하이브리드·RRF·리랭킹 적용
+* Neo4j 원문·청크 ID·임베딩 저장
+* LLM 엔티티 자동 추출
+* 동적 Cypher
+* Microsoft GraphRAG 파이프라인
+* Neo4j Vector Search
+* Azure AI
+
+### 비교 질문
+
+Phase 4 답변 가능 질문 중 관계 질문만 사용
+
+| 질문 ID | 유형 | 기대 청크 |
+| --- | --- | --- |
+| `q-001` | `exact-term` | `graph-engineering-v2026.08.02.pdf#461` |
+| `q-002` | `semantic-paraphrase` | `graph-engineering-v2026.08.02.pdf#461` |
+
+`q-003`은 Graph 질문 메타데이터에 포함하지 않아 Phase 6 비교에서 제외
+
+### GraphDB 구성
+
+실제 생성 데이터:
+
+| 구분 | 결과 |
+| --- | --- |
+| `Document` Vertex | 1개 |
+| `Topic` Vertex | 2개 |
+| `HAS_TOPIC` Edge | 2개 |
+
+```text
+graph-engineering-v2026.08.02.pdf
+→ HAS_TOPIC
+→ 지식 노드
+
+graph-engineering-v2026.08.02.pdf
+→ HAS_TOPIC
+→ 실행 노드
+```
+
+저장 역할:
+
+```text
+Neo4j
+→ Vertex와 Edge
+→ 엔티티명
+→ Document.documentId
+
+PostgreSQL + pgvector
+→ 원문 청크
+→ 청크 메타데이터
+→ 임베딩
+```
+
+GraphDB에는 원문 본문, 청크 ID, 임베딩을 저장하지 않았다.
+
+### Graph 탐색 결과
+
+1-hop:
+
+```text
+Document
+→ HAS_TOPIC
+→ 지식 노드
+
+Document
+→ HAS_TOPIC
+→ 실행 노드
+```
+
+2-hop:
+
+```text
+지식 노드
+← HAS_TOPIC -
+Document
+- HAS_TOPIC →
+실행 노드
+```
+
+| 항목 | 결과 |
+| --- | --- |
+| 탐색 유형 | `DOCUMENTS_BY_TOPICS` |
+| Hop 수 | 2 |
+| 관계 경로 | `HAS_TOPIC → HAS_TOPIC` |
+| 관련 문서 ID | `graph-engineering-v2026.08.02.pdf` |
+
+Neo4j 직접 Cypher 결과와 애플리케이션 Graph 탐색 결과가 일치했다.
+
+### Vector Store 연결
+
+```text
+Neo4j Document.documentId
+=
+graph-engineering-v2026.08.02.pdf
+
+PostgreSQL metadata.file_name
+=
+graph-engineering-v2026.08.02.pdf
+```
+
+Graph에서 조회한 문서 ID를 `metadata.file_name` 필터로 사용해 기존 Vector Store에서 검색했다.
+
+```text
+Graph 관련 문서 ID
+→ file_name 필터
+→ 기존 PgVectorStore
+→ Top-K 5
+→ Similarity Threshold 0.7
+```
+
+### Graph RAG 실행
+
+```powershell
+$env:SPRING_APPLICATION_JSON = @'
+{
+  "rag": {
+    "document": {
+      "enabled": false
+    },
+    "retrieval": {
+      "enabled": false
+    },
+    "generation": {
+      "enabled": false
+    },
+    "evaluation": {
+      "enabled": false
+    },
+    "improvement": {
+      "enabled": false
+    },
+    "graph": {
+      "enabled": true,
+      "questions-path": "evaluation/questions.json",
+      "graph-questions-path": "evaluation/graph-questions.json",
+      "results-path": "evaluation/results/phase6-graph-rag-results.json",
+      "top-k": 5,
+      "similarity-threshold": 0.7
+    }
+  }
+}
+'@
+
+.\gradlew.bat bootRun --console=plain 2>&1 |
+  Tee-Object `
+    -FilePath .\build\phase6-graph-rag-output.txt
+
+Remove-Item Env:SPRING_APPLICATION_JSON
+```
+
+전체 테스트:
+
+```powershell
+.\gradlew.bat clean test --console=plain
+```
+
+### 검색 결과 비교
+
+| 질문 | 일반 RAG | Graph 관련 문서 검색 | 병합 결과 | 상태 |
+| --- | ---: | ---: | ---: | --- |
+| `q-001` | 0건 | 0건 | 0건 | `GRAPH_DOCUMENT_SEARCH_EMPTY` |
+| `q-002` | 0건 | 0건 | 0건 | `GRAPH_DOCUMENT_SEARCH_EMPTY` |
+
+검색 품질:
+
+| 지표 | 일반 RAG | Graph 기반 RAG |
+| --- | ---: | ---: |
+| Hit@5 | `0.0000` | `0.0000` |
+| Recall@5 | `0.0000` | `0.0000` |
+| Precision@5 | `0.0000` | `0.0000` |
+| MRR@5 | `0.0000` | `0.0000` |
+
+### 확인 결과
+
+* `q-001`, `q-002` 모두 2-hop Graph 경로 조회 성공
+* 관련 문서 ID `graph-engineering-v2026.08.02.pdf` 조회 성공
+* `Document.documentId`와 `metadata.file_name` 일치 확인
+* 기대 청크 `#461`의 Vector Store 저장과 원문 근거 확인
+* 일반 RAG와 Graph 관련 문서 범위 검색 모두 0건
+* 두 질문 모두 기대 청크 `#461` 미검색
+* Graph 적용 전후 Retrieval 지표 변화 없음
+* 두 질문 모두 `GRAPH_RETRIEVAL_FAILURE`로 수동 분류
+* 기대 청크가 생성 Context에 없어 Generation 실패로 분류하지 않음
+* Vector Store가 단일 문서로 구성되어 Graph 문서 필터의 검색 범위 축소 효과 없음
+* 전체 테스트 28개 성공, 실패 0개
+* 실제 Neo4j·PostgreSQL·Ollama 연동 성공
+* Graph RAG 실행 `BUILD SUCCESSFUL`
+
+근본적인 기대 청크 미검색 원인은 현재 실행 결과만으로 확정하지 않았다.
+
+### 결과 파일
+
+| 파일 | 역할 |
+| --- | --- |
+| `evaluation/results/phase6-graph-rag-results.json` | Graph RAG 자동 실행 결과 |
+| `evaluation/results/phase6-graph-rag-results-reviewed.json` | Retrieval·Generation 실패 수동 검토 결과 |
+| `build/phase6-graph-rag-output.txt` | Graph RAG 실제 실행 로그 |
+| `docs/phase6-graph-rag.md` | GraphDB 구성, 관계 탐색, Vector Store 연결, 비교 결과 상세 기록 |
+
+> Graph 모델 구성, 1-hop·2-hop Traversal, Vector Store 원문 연결, 일반 RAG와 Graph 기반 RAG 비교 및 수동 검증 결과는 `docs/phase6-graph-rag.md`에 기록
 
 ---
 

@@ -13,6 +13,12 @@ spring:
     username: ${POSTGRES_USER}
     password: ${POSTGRES_PASSWORD}
 
+  neo4j:
+    uri: bolt://localhost:${NEO4J_BOLT_PORT:7687} # Neo4j Bolt 연결 주소
+    authentication:
+      username: ${NEO4J_USERNAME} # Neo4j 사용자명
+      password: ${NEO4J_PASSWORD} # Neo4j 비밀번호
+
   ai:
     model:
       chat: ollama # Ollama Chat Model 사용
@@ -69,3 +75,11 @@ rag:
     candidate-count: 20 # 리랭킹 입력 후보 수
     final-top-k: 5 # 최종 검색 결과 수
     reranking-enabled: false # 리랭킹 적용 여부
+
+  graph:
+    enabled: false # Graph 기반 RAG CLI 실행 여부
+    questions-path: evaluation/questions.json # Phase 4 평가 질문 경로
+    graph-questions-path: evaluation/graph-questions.json # Graph 질문 메타데이터 경로
+    results-path: evaluation/results/phase6-graph-rag-results.json # Phase 6 자동 결과 파일 경로
+    top-k: 5 # Graph 기반 검색 결과 수
+    similarity-threshold: 0.7 # Graph 기반 검색 유사도 임계값

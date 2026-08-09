@@ -1,0 +1,18 @@
+[
+  {
+    "questionId": "q-001",
+    "queryType": "DOCUMENTS_BY_TOPICS",
+    "entityNames": [
+      "지식 노드",
+      "실행 노드"
+    ]
+  },
+  {
+    "questionId": "q-002",
+    "queryType": "DOCUMENTS_BY_TOPICS",
+    "entityNames": [
+      "지식 노드",
+      "실행 노드"
+    ]
+  }
+]
