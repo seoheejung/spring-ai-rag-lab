@@ -56,7 +56,7 @@ flowchart TD
 | Phase 4 | [검색·생성 품질 평가](docs/phase4-evaluation.md)            | 평가 질문 구성, 검색 지표 계산, 생성 답변 근거성 평가                                 |
 | Phase 5 | [검색 방식 개선](docs/phase5-search-improvement.md)       | 키워드·벡터 검색 비교, RRF 기반 하이브리드 검색, 리랭킹 전후 평가                         |
 | Phase 6 | [GraphDB와 Graph 기반 RAG](docs/phase6-graph-rag.md)   | Neo4j 관계 탐색, 관련 문서 ID 조회, Vector Store 원문 연결, 일반 RAG 비교          |
-| Phase 7 | [Azure AI 적용](보류)                                   | Azure OpenAI, Azure AI Search, Semantic Ranker, Azure GraphDB 비교 |
+| Phase 7 | Azure AI 적용 (보류)                                    | Azure OpenAI, Azure AI Search, Semantic Ranker, Azure GraphDB 비교 |
 
 ---
 
