@@ -11,7 +11,7 @@ RAG 처리 과정의 단계별 구현과 검증을 위한 학습 프로젝트
 * 처리 단계별 입력값과 출력값 확인
 * Retrieval 실패와 Generation 실패 구분
 * 검색 설정 변경에 따른 결과 비교
-* 로컬 환경과 Azure AI 구성 비교
+* 로컬 환경과 Azure AI 구성 비교 (보류)
 * 실제 실행 결과 중심의 학습 기록
 
 > 완성된 서비스를 한 번에 구성하는 방식이 아닌 Phase 단위 구현과 검증 방식
@@ -50,15 +50,15 @@ flowchart TD
 
 ## 진행 단계
 
-| Phase   | 주제                                                         | 주요 범위                              |
-| ------- |-------------------------------| ------------------ |
-| Phase 1 | [문서 읽기와 청킹](docs/phase1-document-chunking.md)     | PDF 읽기, `Document` 확인, 청킹 설정 비교 |
-| Phase 2 | [임베딩과 벡터 검색](docs/phase2-vector-search.md)        | 임베딩 생성, pgvector 저장, 유사도 검색 |
-| Phase 3 | [수동 RAG와 QuestionAnswerAdvisor](docs/phase3-rag.md)        | 검색 문맥 구성, `ChatClient` 답변 생성, 수동 방식과 Advisor 방식 비교 |
-| Phase 4 | [검색·생성 품질 평가](docs/phase4-evaluation.md)        | 평가 질문 구성, 검색 지표 계산, 생성 답변 근거성 평가 |
-| Phase 5 | [검색 방식 개선](docs/phase5-search-improvement.md)        | 키워드·벡터 검색 비교, RRF 기반 하이브리드 검색, 리랭킹 전후 평가 |
-| Phase 6 | [GraphDB와 Graph 기반 RAG](docs/phase6-graph-rag.md) | Neo4j 관계 탐색, 관련 문서 ID 조회, Vector Store 원문 연결, 일반 RAG 비교 |
-| Phase 7 | Azure AI 적용                                                | Azure OpenAI와 Azure AI Search 적용   |
+| Phase   | 주제                                                  | 주요 범위                                                            |
+| ------- |-----------------------------------------------------| ---------------------------------------------------------------- |
+| Phase 1 | [문서 읽기와 청킹](docs/phase1-document-chunking.md)       | PDF 읽기, `Document` 확인, 청킹 설정 비교                                  |
+| Phase 2 | [임베딩과 벡터 검색](docs/phase2-vector-search.md)          | 임베딩 생성, pgvector 저장, 유사도 검색                                      |
+| Phase 3 | [수동 RAG와 QuestionAnswerAdvisor](docs/phase3-rag.md) | 검색 문맥 구성, `ChatClient` 답변 생성, 수동 방식과 Advisor 방식 비교               |
+| Phase 4 | [검색·생성 품질 평가](docs/phase4-evaluation.md)            | 평가 질문 구성, 검색 지표 계산, 생성 답변 근거성 평가                                 |
+| Phase 5 | [검색 방식 개선](docs/phase5-search-improvement.md)       | 키워드·벡터 검색 비교, RRF 기반 하이브리드 검색, 리랭킹 전후 평가                         |
+| Phase 6 | [GraphDB와 Graph 기반 RAG](docs/phase6-graph-rag.md)   | Neo4j 관계 탐색, 관련 문서 ID 조회, Vector Store 원문 연결, 일반 RAG 비교          |
+| Phase 7 | [Azure AI 적용](보류)                                   | Azure OpenAI, Azure AI Search, Semantic Ranker, Azure GraphDB 비교 |
 
 ---
 
@@ -80,9 +80,6 @@ flowchart TD
 | 생성 품질 평가      | 검색 청크와 생성 답변 수동 대조                 |
 | GraphDB       | Neo4j                              |
 | 문서 형식         | Markdown, Text, PDF                |
-| Azure 모델      | Azure OpenAI                       |
-| Azure 검색      | Azure AI Search                    |
-| Azure GraphDB | Azure Cosmos DB for Apache Gremlin |
 | 빌드 도구         | Gradle                             |
 
 ---
@@ -101,6 +98,7 @@ spring-ai-rag-lab/
 │   └── normalized/
 ├── evaluation/
 │   ├── questions.json
+│   ├── graph-questions.json
 │   └── results/
 ├── docs/
 │   ├── phase1-document-chunking.md
@@ -108,8 +106,8 @@ spring-ai-rag-lab/
 │   ├── phase3-rag.md
 │   ├── phase4-evaluation.md
 │   ├── phase5-search-improvement.md
-│   ├── phase6-graph-rag.md
-│   └── phase7-azure-rag.md
+│   └── phase6-graph-rag.md
+│
 └── src/
     ├── main/
     │   ├── java/
@@ -117,8 +115,8 @@ spring-ai-rag-lab/
     │   │       ├── document/
     │   │       ├── retrieval/
     │   │       ├── generation/
-    │   │       ├── graph/
-    │   │       └── evaluation/
+    │   │       ├── evaluation/
+    │   │       └── graph/
     │   └── resources/
     └── test/
         └── java/
@@ -126,21 +124,21 @@ spring-ai-rag-lab/
                 ├── document/
                 ├── retrieval/
                 ├── generation/
-                ├── graph/
-                └── evaluation/
+                ├── evaluation/
+                └── graph/
 ```
 
-
-| 경로                          | 역할                         |
-| --------------------------- | -------------------------- |
-| `documents/source`          | 원본 문서                      |
-| `documents/normalized`      | 정규화된 문서                    |
-| `evaluation/questions.json` | 평가 질문, 질문 유형, 기대 문서, 기대 청크 |
-| `evaluation/results`        | 검색 결과, 생성 답변, 수동 평가 결과     |
-| `docs/phase*.md`            | Phase별 구현·실행·검증 기록         |
-| `src/main/java`             | 애플리케이션 코드                  |
-| `src/main/resources`        | 애플리케이션 설정                  |
-| `src/test/java`             | 자동 검증 코드                   |
+| 경로                                | 역할                         |
+| --------------------------------- | -------------------------- |
+| `documents/source`                | 원본 문서                      |
+| `documents/normalized`            | 정규화된 문서                    |
+| `evaluation/questions.json`       | 평가 질문, 질문 유형, 기대 문서, 기대 청크 |
+| `evaluation/graph-questions.json` | Graph 관계 질문과 탐색 조건         |
+| `evaluation/results`              | 검색 결과, 생성 답변, 수동 평가 결과     |
+| `docs/phase*.md`                  | Phase별 구현·실행·검증 기록         |
+| `src/main/java`                   | 애플리케이션 코드                  |
+| `src/main/resources`              | 애플리케이션 설정                  |
+| `src/test/java`                   | 자동 검증 코드                   |
 
 > Java 패키지는 Phase 번호가 아닌 기능과 구성요소의 책임을 기준으로 구성
 
@@ -858,6 +856,23 @@ Remove-Item Env:SPRING_APPLICATION_JSON
 | `docs/phase6-graph-rag.md` | GraphDB 구성, 관계 탐색, Vector Store 연결, 비교 결과 상세 기록 |
 
 > Graph 모델 구성, 1-hop·2-hop Traversal, Vector Store 원문 연결, 일반 RAG와 Graph 기반 RAG 비교 및 수동 검증 결과는 `docs/phase6-graph-rag.md`에 기록
+
+## Phase 7 (보류)
+
+> Phase 1~6의 문서와 평가 조건을 유지하고 로컬 구성을 Azure 서비스로 교체해 결과 비교
+
+### 구성 대응
+
+| 로컬                          | Azure                              |
+| --------------------------- | ---------------------------------- |
+| 로컬 문서                       | Azure Blob Storage                 |
+| Ollama Embedding            | Azure OpenAI Embedding             |
+| Ollama Chat                 | Azure OpenAI Chat                  |
+| pgvector                    | Azure AI Search                    |
+| PostgreSQL Full-text Search | Azure AI Search Full-text Search   |
+| 수동 RRF                      | Azure AI Search Hybrid Search      |
+| 로컬 리랭킹                      | Azure AI Search Semantic Ranker    |
+| Neo4j                       | Azure Cosmos DB for Apache Gremlin |
 
 ---
 
