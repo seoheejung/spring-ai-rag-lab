@@ -1,5 +1,7 @@
 # Spring AI RAG Lab
 
+[🌐 프로젝트 정리 슬라이드](https://seoheejung.github.io/spring-ai-rag-lab/)
+
 ## 프로젝트 개요
 
 RAG 처리 과정의 단계별 구현과 검증을 위한 학습 프로젝트
